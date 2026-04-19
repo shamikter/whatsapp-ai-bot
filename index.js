@@ -367,6 +367,22 @@ client.on('message', async (message) => {
 
     const text = message.body.trim();
     const lang = detectLanguage(text);
+    const short = cleanCommonTypos(text);
+
+    if (short === 'oi' || short === 'ola' || short === 'olá') {
+      await message.reply('Olá! Como posso ajudar você?');
+      return;
+    }
+
+    if (short === 'hola') {
+      await message.reply('¡Hola! ¿En qué puedo ayudarle?');
+      return;
+    }
+
+    if (short === 'hi' || short === 'hello') {
+      await message.reply('Hello! How can I help you?');
+      return;
+    }
 
     console.log('Incoming:', text);
 
