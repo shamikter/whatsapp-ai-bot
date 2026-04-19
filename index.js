@@ -202,11 +202,11 @@ async function askAI(text) {
   return res.choices[0].message.content;
 }
 
-client.on('qr', qr => {
-  console.log('Scan QR');
-  qrcode.generate(qr, { small: true });
+client.on('qr', (qr) => {
+  console.log('====== QR LINK ======');
+  console.log('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + qr);
+  console.log('=====================');
 });
-
 client.on('ready', () => {
   console.log('Bot is ready');
 });
