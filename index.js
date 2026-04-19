@@ -176,6 +176,11 @@ function cleanCommonTypos(text) {
 function detectLanguage(text) {
   const t = cleanCommonTypos(text);
 
+  // HARD RULES for short greetings
+  if (t === 'oi' || t === 'ola' || t === 'olá') return 'pt';
+  if (t === 'hola') return 'es';
+  if (t === 'hi' || t === 'hello') return 'en';
+
   const ptWords = [
     'oi', 'ola', 'olá', 'obrigado', 'obrigada', 'reserva',
     'quarto', 'chegada', 'saida', 'saída', 'bagagem',
@@ -203,15 +208,21 @@ function detectLanguage(text) {
   let enScore = 0;
 
   for (const w of ptWords) {
-    if (t.includes(w)) ptScore += ['oi', 'ola', 'olá', 'posso', 'tem', 'quarto', 'cozinha', 'bagagem'].includes(w) ? 2 : 1;
+    if (t.includes(w)) {
+      ptScore += ['oi', 'ola', 'olá', 'posso', 'tem', 'quarto', 'cozinha', 'bagagem'].includes(w) ? 2 : 1;
+    }
   }
 
   for (const w of esWords) {
-    if (t.includes(w)) esScore += ['hola', 'puedo', 'hay', 'habitacion', 'habitación', 'equipaje', 'cocina'].includes(w) ? 2 : 1;
+    if (t.includes(w)) {
+      esScore += ['hola', 'puedo', 'hay', 'habitacion', 'habitación', 'equipaje', 'cocina'].includes(w) ? 2 : 1;
+    }
   }
 
   for (const w of enWords) {
-    if (t.includes(w)) enScore += ['hello', 'hi', 'can i', 'do you', 'room', 'luggage', 'kitchen'].includes(w) ? 2 : 1;
+    if (t.includes(w)) {
+      enScore += ['hello', 'hi', 'can i', 'do you', 'room', 'luggage', 'kitchen'].includes(w) ? 2 : 1;
+    }
   }
 
   if (ptScore > esScore && ptScore > enScore) return 'pt';
