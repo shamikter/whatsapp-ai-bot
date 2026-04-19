@@ -297,23 +297,59 @@ function isDuplicate(message) {
   return false;
 }
 
-async function askAI(text) {
-  const res = await openai.chat.completions.create({
+async function askAI(userText) {
+  const prompt = `
+You are a professional hotel/hostel WhatsApp assistant.
+
+STRICT RULES:
+- ALWAYS reply in the SAME language as the user message.
+- NEVER switch language.
+- If the user writes in Spanish, reply in Spanish.
+- If the user writes in Portuguese, reply in Brazilian Portuguese.
+- If the user writes in English, reply in English.
+
+STYLE:
+- Short (2 to 4 sentences maximum)
+- Friendly and polite
+- Natural, not robotic
+- Clear and practical
+
+TASK:
+- Answer ALL parts of the user's message
+- If the user asks about early arrival or early check-in:
+  explain that standard check-in is at 15:00,
+  mention luggage storage,
+  and say early check-in depends on availability
+- If the user asks about late arrival:
+  confirm it is possible and ask them to inform the reception in advance
+- If the user asks about parking, luggage, kitchen, breakfast, Wi-Fi, or check-in/check-out,
+  answer specifically and not in a generic way
+
+HOTEL CONTEXT:
+- Check-in: 15:00
+- Check-out: 11:00
+- Wi-Fi available
+- Luggage storage available
+- Shared kitchen available
+- Parking depends on availability
+
+DO NOT:
+- invent random hotel policies
+- ignore part of the user's question
+- answer in the wrong language
+- give long generic chatbot answers
+
+User message:
+${userText}
+`;
+
+  const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a hotel and hostel WhatsApp assistant. Detect the language automatically and reply only in English, Spanish (Castellano), or Portuguese (Brazil). Keep replies short, practical, and specific. Use no more than 3 short sentences.'
-      },
-      {
-        role: 'user',
-        content: text
-      }
-    ],
-    temperature: 0.2
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.3
   });
 
-  return res.choices[0].message.content;
+  return completion.choices[0].message.content;
 }
 
 const client = new Client({
@@ -386,7 +422,23 @@ client.on('message', async (message) => {
 
     console.log('Incoming:', text);
 
-    const kb = findKBAnswer(text, lang);
+    const cleaned = cleanCommonTypos(text);
+
+    const isSimple =
+      cleaned.split(' ').length <= 3 &&
+      !cleaned.includes('?');
+
+    const isComplex =
+      text.length > 40 ||
+      cleaned.includes('?') ||
+      cleaned.split(' ').length > 6;
+
+    let kb = null;
+
+    if (isSimple && !isComplex) {
+      kb = findKBAnswer(text, lang);
+    }
+
     if (kb) {
       await message.reply(kb);
       return;
