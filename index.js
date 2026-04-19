@@ -132,32 +132,139 @@ const KB = {
 };
 
 function normalize(text) {
-  return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[¿?¡!.,;:()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanCommonTypos(text) {
+  let t = normalize(text);
+
+  const replacements = [
+    [/^helo\b/g, 'hello'],
+    [/\bhelo\b/g, 'hello'],
+    [/\bwifii\b/g, 'wifi'],
+    [/\bwify\b/g, 'wifi'],
+    [/\bwi fi\b/g, 'wifi'],
+    [/\bchek in\b/g, 'check in'],
+    [/\bchek\b/g, 'check'],
+    [/\bcheckin\b/g, 'check in'],
+    [/\bcheckout\b/g, 'check out'],
+    [/\bbagaje\b/g, 'equipaje'],
+    [/\bbagage\b/g, 'luggage'],
+    [/\bequipage\b/g, 'equipaje'],
+    [/\bcozina\b/g, 'cozinha'],
+    [/\bcozina compartilhada\b/g, 'cozinha compartilhada'],
+    [/\bparquing\b/g, 'parking'],
+    [/\bdesayno\b/g, 'desayuno'],
+    [/\bcafe da manha\b/g, 'cafe da manha'],
+    [/\bposo\b/g, 'posso'],
+    [/\bchegar tardee\b/g, 'chegar tarde']
+  ];
+
+  for (const [pattern, replacement] of replacements) {
+    t = t.replace(pattern, replacement);
+  }
+
+  return t;
 }
 
 function detectLanguage(text) {
-  const t = normalize(text);
+  const t = cleanCommonTypos(text);
 
-  const ptWords = ['ola', 'obrigado', 'reserva', 'quarto', 'chegada', 'saida', 'bagagem', 'cozinha'];
-  const esWords = ['hola', 'gracias', 'reserva', 'habitacion', 'llegada', 'salida', 'equipaje', 'cocina'];
-  const enWords = ['hello', 'hi', 'thanks', 'booking', 'room', 'arrival', 'departure', 'luggage', 'kitchen'];
+  const ptWords = [
+    'oi', 'ola', 'olá', 'obrigado', 'obrigada', 'reserva',
+    'quarto', 'chegada', 'saida', 'saída', 'bagagem',
+    'cozinha', 'recepcao', 'recepção', 'estacionamento',
+    'toalha', 'lavanderia', 'posso', 'tem', 'wifi',
+    'check in', 'check out', 'chegar tarde'
+  ];
 
-  const ptScore = ptWords.filter(w => t.includes(w)).length;
-  const esScore = esWords.filter(w => t.includes(w)).length;
-  const enScore = enWords.filter(w => t.includes(w)).length;
+  const esWords = [
+    'hola', 'gracias', 'reserva', 'habitacion', 'habitación',
+    'llegada', 'salida', 'equipaje', 'cocina', 'recepcion',
+    'recepción', 'aparcamiento', 'toalla', 'puedo', 'hay',
+    'wifi', 'check in', 'check out', 'dejar equipaje'
+  ];
 
-  if (ptScore > esScore && ptScore >= enScore) return 'pt';
-  if (esScore > ptScore && esScore >= enScore) return 'es';
+  const enWords = [
+    'hello', 'hi', 'thanks', 'booking', 'room', 'arrival',
+    'departure', 'luggage', 'kitchen', 'reception', 'parking',
+    'towel', 'laundry', 'can i', 'do you', 'wifi',
+    'check in', 'check out', 'late arrival'
+  ];
+
+  let ptScore = 0;
+  let esScore = 0;
+  let enScore = 0;
+
+  for (const w of ptWords) {
+    if (t.includes(w)) ptScore += ['oi', 'ola', 'olá', 'posso', 'tem', 'quarto', 'cozinha', 'bagagem'].includes(w) ? 2 : 1;
+  }
+
+  for (const w of esWords) {
+    if (t.includes(w)) esScore += ['hola', 'puedo', 'hay', 'habitacion', 'habitación', 'equipaje', 'cocina'].includes(w) ? 2 : 1;
+  }
+
+  for (const w of enWords) {
+    if (t.includes(w)) enScore += ['hello', 'hi', 'can i', 'do you', 'room', 'luggage', 'kitchen'].includes(w) ? 2 : 1;
+  }
+
+  if (ptScore > esScore && ptScore > enScore) return 'pt';
+  if (esScore > ptScore && esScore > enScore) return 'es';
+  if (enScore > ptScore && enScore > esScore) return 'en';
+
+  if (/\boi\b|\bola\b|\bposso\b|\btem\b/.test(t)) return 'pt';
+  if (/\bhola\b|\bpuedo\b|\bhay\b/.test(t)) return 'es';
+  if (/\bhello\b|\bhi\b|\bcan i\b|\bdo you\b/.test(t)) return 'en';
+
   return 'en';
 }
 
 function findKBAnswer(text, lang) {
-  const t = normalize(text);
+  const t = cleanCommonTypos(text);
 
   for (const item of Object.values(KB)) {
-    if (item.keywords.some(k => t.includes(normalize(k)))) {
+    if (item.keywords.some(k => t.includes(cleanCommonTypos(k)))) {
       return item.answer[lang] || item.answer.en;
     }
+  }
+
+  // extra semantic shortcuts for typo-heavy queries
+  if (t.includes('wifi')) {
+    return KB.wifi.answer[lang] || KB.wifi.answer.en;
+  }
+
+  if (t.includes('equipaje') || t.includes('luggage') || t.includes('bagagem')) {
+    return KB.luggage.answer[lang] || KB.luggage.answer.en;
+  }
+
+  if (t.includes('cocina') || t.includes('cozinha') || t.includes('kitchen')) {
+    return KB.kitchen.answer[lang] || KB.kitchen.answer.en;
+  }
+
+  if (t.includes('parking') || t.includes('aparcamiento') || t.includes('estacionamento')) {
+    return KB.parking.answer[lang] || KB.parking.answer.en;
+  }
+
+  if (t.includes('breakfast') || t.includes('desayuno') || t.includes('cafe da manha')) {
+    return KB.breakfast.answer[lang] || KB.breakfast.answer.en;
+  }
+
+  if (t.includes('check in') || t.includes('arrival') || t.includes('llegada') || t.includes('chegada')) {
+    return KB.checkin.answer[lang] || KB.checkin.answer.en;
+  }
+
+  if (t.includes('check out') || t.includes('departure') || t.includes('salida') || t.includes('saida')) {
+    return KB.checkout.answer[lang] || KB.checkout.answer.en;
+  }
+
+  if (t.includes('late') || t.includes('tarde') || t.includes('chegar tarde') || t.includes('llegar tarde')) {
+    return KB.checkin.answer[lang] || KB.checkin.answer.en;
   }
 
   return null;
