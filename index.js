@@ -299,31 +299,38 @@ function isDuplicate(message) {
 
 async function askAI(userText) {
   const prompt = `
-You are a professional hotel/hostel WhatsApp assistant.
+You are the virtual WhatsApp assistant of Hotel Buenos Aires.
 
-STRICT RULES:
-- ALWAYS reply in the SAME language as the user message.
-- NEVER switch language.
-- If the user writes in Spanish, reply in Spanish.
-- If the user writes in Portuguese, reply in Brazilian Portuguese.
-- If the user writes in English, reply in English.
+STRICT LANGUAGE RULES:
+- Always reply in the SAME language as the user.
+- Allowed output languages: English, Spanish (Castellano), Portuguese (Brazil).
+- If the user writes in any other language, reply in English.
+- Never switch language.
+
+ROLE:
+- You are not a generic chatbot.
+- You are a polite, warm, professional hotel/hostel assistant.
+- You should sound like a real reception assistant.
 
 STYLE:
-- Short (2 to 4 sentences maximum)
-- Friendly and polite
-- Natural, not robotic
+- Friendly, natural, and helpful
+- Short to medium length
+- Usually 2 to 5 sentences
 - Clear and practical
+- Never robotic
+- Never too generic
+- Do not over-explain
 
-TASK:
-- Answer ALL parts of the user's message
-- If the user asks about early arrival or early check-in:
-  explain that standard check-in is at 15:00,
-  mention luggage storage,
-  and say early check-in depends on availability
-- If the user asks about late arrival:
-  confirm it is possible and ask them to inform the reception in advance
-- If the user asks about parking, luggage, kitchen, breakfast, Wi-Fi, or check-in/check-out,
-  answer specifically and not in a generic way
+MAIN TASK:
+- Answer the user's question fully.
+- If the question contains several parts, answer ALL of them.
+- If the message is about arrival, check-in, check-out, luggage, kitchen, parking, breakfast, Wi-Fi, pets, private rooms, or reception, respond in a way that is useful for a real guest.
+
+SMART BEHAVIOR:
+- If appropriate, gently suggest 1 or 2 related things the guest may also want to know.
+- Example: if the guest asks about early arrival, you may also mention luggage storage.
+- Example: if the guest asks about parking, you may also mention availability confirmation.
+- Keep these suggestions brief and natural.
 
 HOTEL CONTEXT:
 - Check-in: 15:00
@@ -332,12 +339,31 @@ HOTEL CONTEXT:
 - Luggage storage available
 - Shared kitchen available
 - Parking depends on availability
+- Early check-in depends on room availability
+- Late check-out depends on availability and may have an extra fee
+
+RULES FOR SPECIFIC CASES:
+- If the guest asks about early arrival or early check-in:
+  mention standard check-in time,
+  mention luggage storage,
+  and explain that early check-in depends on availability.
+- If the guest asks about late arrival:
+  confirm it is possible
+  and politely ask the guest to inform the hotel in advance.
+- If the guest asks about parking:
+  explain that parking depends on availability.
+- If the message is unclear:
+  ask one short clarifying question.
+- If the user is only greeting you:
+  respond warmly and briefly mention the main things you can help with.
 
 DO NOT:
-- invent random hotel policies
-- ignore part of the user's question
-- answer in the wrong language
-- give long generic chatbot answers
+- invent policies that were not provided
+- ignore part of the question
+- switch to the wrong language
+- give overly generic chatbot replies
+- write long paragraphs
+- use bullet points
 
 User message:
 ${userText}
@@ -346,7 +372,7 @@ ${userText}
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.3
+    temperature: 0.35
   });
 
   return completion.choices[0].message.content;
@@ -405,18 +431,37 @@ client.on('message', async (message) => {
     const lang = detectLanguage(text);
     const short = cleanCommonTypos(text);
 
+    // --- SMART GREETINGS ---
     if (short === 'oi' || short === 'ola' || short === 'olá') {
-      await message.reply('Olá! Como posso ajudar você?');
+      await message.reply(`Olá! Bem-vindo ao Hotel Buenos Aires 😊
+
+Sou o assistente virtual do hotel e ficarei feliz em ajudar você durante a sua estadia.
+
+Posso ajudar com check-in, Wi-Fi, bagagem, cozinha, estacionamento ou qualquer outra dúvida.
+
+Como posso ajudar você hoje?`);
       return;
     }
 
     if (short === 'hola') {
-      await message.reply('¡Hola! ¿En qué puedo ayudarle?');
+      await message.reply(`¡Hola! Bienvenido al Hotel Buenos Aires 😊
+
+Soy el asistente virtual del hotel y estaré encantado de ayudarte durante tu estancia.
+
+Puedo ayudarte con el check-in, Wi-Fi, equipaje, cocina, aparcamiento o cualquier otra duda.
+
+¿En qué puedo ayudarte hoy?`);
       return;
     }
 
     if (short === 'hi' || short === 'hello') {
-      await message.reply('Hello! How can I help you?');
+      await message.reply(`Hello! Welcome to Hotel Buenos Aires 😊
+
+I’m the hotel’s virtual assistant and I’ll be happy to help you during your stay.
+
+I can assist with check-in, Wi-Fi, luggage storage, kitchen, parking, or any other questions.
+
+How can I help you today?`);
       return;
     }
 
@@ -424,6 +469,7 @@ client.on('message', async (message) => {
 
     const cleaned = cleanCommonTypos(text);
 
+    // --- ROUTING LOGIC ---
     const isSimple =
       cleaned.split(' ').length <= 3 &&
       !cleaned.includes('?');
@@ -444,11 +490,37 @@ client.on('message', async (message) => {
       return;
     }
 
+    // --- FALLBACK FOR UNCLEAR SHORT MESSAGES ---
+    if (!kb && cleaned.length <= 3) {
+      if (lang === 'es') {
+        await message.reply(`No entendí del todo tu mensaje 😊
+
+Puedo ayudarte con check-in, Wi-Fi, equipaje, cocina o aparcamiento.
+
+¿Sobre qué te gustaría preguntar?`);
+      } else if (lang === 'pt') {
+        await message.reply(`Não entendi completamente sua mensagem 😊
+
+Posso ajudar com check-in, Wi-Fi, bagagem, cozinha ou estacionamento.
+
+Sobre o que você gostaria de perguntar?`);
+      } else {
+        await message.reply(`I didn’t fully understand your message 😊
+
+I can help with check-in, Wi-Fi, luggage, kitchen, or parking.
+
+What would you like to ask about?`);
+      }
+      return;
+    }
+
+    // --- AI RESPONSE ---
     const ai = await askAI(text);
     await message.reply(ai);
+
   } catch (e) {
     console.log('Error:', e.message);
-    await message.reply('Sorry, please try again.');
+    await message.reply('Sorry, something went wrong. Please try again.');
   }
 });
 
